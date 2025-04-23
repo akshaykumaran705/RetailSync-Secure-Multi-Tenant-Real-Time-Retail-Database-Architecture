@@ -364,3 +364,64 @@ Key features:
 
 > The script includes conversion fixes for Decimal and date types, preventing BSON encoding errors.
 
+
+
+---
+
+## 7. Terminal Commands Used for Kafka & Connector Setup
+
+Here are the key terminal commands used throughout the replication process:
+
+### ✅ Starting Zookeeper
+
+```bash
+~/kafka/bin/zookeeper-server-start.sh ~/kafka/config/zookeeper.properties
+```
+
+### ✅ Starting Kafka Server
+
+```bash
+~/kafka/bin/kafka-server-start.sh ~/kafka/config/server.properties
+```
+
+### ✅ Starting Kafka Connect (Distributed Mode)
+
+```bash
+~/kafka/bin/connect-distributed.sh ~/kafka/config/connect-distributed.properties
+```
+
+Make sure to configure the plugin path inside `connect-distributed.properties`:
+```properties
+plugin.path=/path/to/kafka/connectors
+```
+
+### ✅ Posting the Debezium PostgreSQL Source Connector
+
+```bash
+curl -X POST http://localhost:8083/connectors   -H "Content-Type: application/json"   -d @postgres-source.json
+```
+
+### ✅ Posting the MongoDB Sink Connector
+
+```bash
+curl -X POST http://localhost:8083/connectors   -H "Content-Type: application/json"   -d @mongodb-sink.json
+```
+
+### ✅ Checking Kafka Topics and Messages (Consumer)
+
+```bash
+~/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list
+
+~/kafka/bin/kafka-console-consumer.sh   --bootstrap-server localhost:9092   --topic walmartdb.public.transactions   --from-beginning
+```
+
+### ✅ Deleting an Existing Connector (Optional Cleanup)
+
+```bash
+curl -X DELETE http://localhost:8083/connectors/postgres-source-transactions
+curl -X DELETE http://localhost:8083/connectors/mongodb-sink-transactions
+```
+
+---
+
+These commands formed the backbone of connecting PostgreSQL → Kafka → MongoDB in both real-time and initial setup scenarios.
