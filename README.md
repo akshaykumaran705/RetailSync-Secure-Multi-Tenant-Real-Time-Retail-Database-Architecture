@@ -286,3 +286,81 @@ USING (true)
 WITH CHECK (true);
 ```
 
+
+
+---
+
+## 6. Real-Time Replication Using Kafka, Debezium, and MongoDB
+
+To enable real-time replication of PostgreSQL data to MongoDB, we used Kafka and the Debezium Change Data Capture (CDC) connector. Below is the configuration and explanation of how this setup works.
+
+### 🔁 Source Connector: PostgreSQL → Kafka (Debezium)
+
+We used the Debezium PostgreSQL connector with the following configuration:
+
+```json
+{
+  "name": "postgres-source-transactions",
+  "config": {
+    "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+    "plugin.name": "pgoutput",
+    "database.hostname": "localhost",
+    "database.port": "5432",
+    "database.user": "postgres",
+    "database.password": "Irlocx10@",
+    "database.dbname": "walmart",
+    "database.server.name": "walmartdb",
+    "topic.prefix": "walmartdb",
+    "table.include.list": "public.transactions,public.inventory,public.transactiondetails",
+    "slot.name": "walmart_slot",
+    "publication.name": "walmart_publication",
+    "key.converter": "org.apache.kafka.connect.storage.StringConverter",
+    "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+    "value.converter.schemas.enable": "false"
+  }
+}
+```
+
+This configuration enables logical decoding in PostgreSQL using `pgoutput`, which captures changes to the specified tables (`transactions`, `inventory`, `transactiondetails`) and pushes them into Kafka topics.
+
+---
+
+### 🔄 Sink Connector: Kafka → MongoDB
+
+The MongoDB Sink connector consumes the Kafka topics and writes the data into MongoDB collections:
+
+```json
+{
+  "name": "mongodb-sink-transactions",
+  "config": {
+    "connector.class": "com.mongodb.kafka.connect.MongoSinkConnector",
+    "tasks.max": "1",
+    "topics": "walmartdb.public.transactions,walmartdb.public.inventory,walmartdb.public.transactiondetails",
+    "connection.uri": "mongodb://localhost:27017",
+    "database": "walmart_realtime",
+    "key.converter": "org.apache.kafka.connect.storage.StringConverter",
+    "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+    "value.converter.schemas.enable": "false",
+    "topic.override.walmartdb.public.transactions.collection": "transactions",
+    "topic.override.walmartdb.public.inventory.collection": "inventory",
+    "topic.override.walmartdb.public.transactiondetails.collection": "transactiondetails"
+  }
+}
+```
+
+This ensures each Kafka topic is mapped directly to a MongoDB collection, maintaining real-time sync.
+
+---
+
+### ⏬ Initial Batch Backfill Script (Python)
+
+To populate MongoDB with historical PostgreSQL data before enabling real-time replication, we used a Python script (`repli.py`) that queried PostgreSQL and inserted documents into MongoDB.
+
+Key features:
+- Connects to both PostgreSQL and MongoDB
+- Iterates through specified table list
+- Converts data types (e.g., `Decimal`, `date`) to MongoDB-compatible formats
+- Adds metadata for ETL traceability
+
+> The script includes conversion fixes for Decimal and date types, preventing BSON encoding errors.
+
