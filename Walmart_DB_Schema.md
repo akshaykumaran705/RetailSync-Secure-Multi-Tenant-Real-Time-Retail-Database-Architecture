@@ -1,6 +1,6 @@
 # PostgreSQL Retail Database Project: Walmart Case Study
 
-This document outlines the schema, procedures, triggers, and setup used to support a retail transaction database with fraud detection and inventory automation.
+This document outlines the schema, procedures, triggers, Row-Level Security, batch ETL, and real-time streaming setup used to support a multi-tenant retail transaction database with real-time replication and analytics.
 
 ---
 
@@ -195,3 +195,65 @@ BEGIN
 END;
 $$;
 ```
+
+---
+
+## 5. Row-Level Security (RLS) Implementation
+
+Row-Level Security ensures that each tenant (store) can only access its own data.
+
+```sql
+ALTER TABLE Transactions ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY tenant_isolation_policy ON Transactions
+USING (store_id = current_setting('app.current_store')::INT);
+
+ALTER TABLE Transactions FORCE ROW LEVEL SECURITY;
+```
+
+Before any query session, the current store context must be set:
+
+```sql
+SET app.current_store = '5'; -- Example: store_id = 5
+```
+
+---
+
+## 6. Batch ETL Strategy for Static Tables
+
+- Batch ETL was performed for tables like `Products`, `Customers`, `Stores`, `Promotions`, `PaymentMethods`, `Weather`, etc.
+- Python scripts (using `psycopg2` and `pymongo`) were used to extract data from PostgreSQL and load it into MongoDB.
+- This initial load ensures MongoDB has complete static and dimension data before real-time replication starts.
+
+---
+
+## 7. Kafka + MongoDB Real-Time Streaming Strategy
+
+- Kafka Connect and Debezium were configured to monitor PostgreSQL changes.
+- Only `Transactions` and `Inventory` tables were set up for real-time CDC replication.
+- The changes are streamed into Kafka topics like `walmartdb.public.transactions`.
+- MongoDB Sink Connector listens to these topics and writes changes to the respective MongoDB collections.
+
+**Data Flow:**
+```
+PostgreSQL (CDC via Debezium) → Kafka Topics → MongoDB Sink Connector → MongoDB Collections
+```
+
+This ensures that MongoDB always has up-to-date transactional data for reporting and analytics.
+
+---
+
+## 8. System Architecture Diagram
+
+```
+PostgreSQL (OLTP + RLS)
+│
+├── Batch ETL → MongoDB (Static Tables)
+│
+└── Kafka + Debezium (CDC for Transactions & Inventory)
+        ↓
+   Kafka Topics
+        ↓
+MongoDB Sink Connector
+        ↓
+MongoDB (Real-Time Collections)
