@@ -1,153 +1,142 @@
-
-# PostgreSQL Retail Database Project: Walmart Case Study
-
-This document outlines the schema, procedures, triggers, and setup used to support a retail transaction database with fraud detection, inventory automation, row-level security, and real-time replication using Kafka and MongoDB.
+# Secure and Scalable Multi-Tenant Database Architecture for SaaS Using Row-Level Security (RLS) in PostgreSQL
 
 ---
 
-# 1. Walmart ERD - Final
+# 📖 Introduction
 
-![Walmart ERD - Final](images/WalmartERD-Final.jpg)
+This project builds a **secure, scalable, multi-tenant retail database** system for a SaaS application. It uses:
+- **PostgreSQL** for OLTP transactions
+- **Row-Level Security (RLS)** for strict tenant data isolation
+- **Kafka + Debezium** for **real-time CDC replication** from PostgreSQL to MongoDB
+- **MongoDB** for analytics and fraud detection
+
+Dataset: Cleaned Walmart retail data.
 
 ---
 
-# 2. Real-Time Replication Strategy
+# 🖼️ ERD and Architecture Diagrams
+
+### 1. Database Design Overview
+
+![Database Design](images/WalmartERD-Database%20Design.jpg)
+
+> This ERD shows the normalized relational schema where Customers, Products, Promotions, and Weather are linked to Transactions.
+
+### 2. Final ERD after Normalization
+
+![Final ERD](images/WalmartERD-Final.jpg)
+
+> This final ERD includes additional normalization such as Categories and Suppliers to improve modularity and support tenant separation.
+
+### 3. Replication Strategy Diagram
 
 ![Replication Strategy](images/WalmartERD-ReplicationStrategy.jpg)
 
----
-
-# 3. Database Design - ERD
-
-![Database Design](images/WalmartERD-Database Design.jpg)
+> Red tables are real-time replicated using Kafka+Debezium, Green tables are batch ETL loaded to MongoDB.
 
 ---
 
-# 4. Schema Definition
+# 🗄️ PostgreSQL Schema (Full)
 
 ```sql
--- Customers Table
-CREATE TABLE Customers (
-    customer_id INT PRIMARY KEY,
-    age INT,
-    gender VARCHAR(10),
-    income DECIMAL(10,2),
-    loyalty_level VARCHAR(20)
-);
-
--- Stores Table
-CREATE TABLE Stores (
-    store_id INT PRIMARY KEY,
-    location VARCHAR(100)
-);
-...
--- (Truncated for size: Tables Products, Inventory, Weather, Promotions, PaymentMethods)
-```
-
-(continued full schema and sections below, then...)
-
----
-
-# 5. Fact and Bridge Tables
-
-```sql
--- Transactions
--- TransactionDetails
--- PromotionApplications
--- DemandForecast
-```
-(continued full definitions)
-
----
-
-# 6. Trigger for Inventory Update
-
-```sql
-CREATE OR REPLACE FUNCTION update_inventory_after_detail() RETURNS TRIGGER AS $$
-DECLARE
-  store INT;
-BEGIN
-  SELECT store_id INTO store FROM Transactions WHERE transaction_id = NEW.transaction_id;
-
-  UPDATE Inventory
-  SET inventory_level = inventory_level - NEW.quantity
-  WHERE store_id = store AND product_id = NEW.product_id;
-
-  IF NOT FOUND THEN
-      RAISE EXCEPTION 'Inventory update failed: Product % not found in Store %', NEW.product_id, store;
-  END IF;
-
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER trg_update_inventory_after_detail
-AFTER INSERT ON TransactionDetails
-FOR EACH ROW
-EXECUTE FUNCTION update_inventory_after_detail();
+-- Creating all tables needed for the system.
+-- This ensures full normalization and relationship integrity across Customers, Stores, Products, Transactions, Promotions, Inventory, and Forecasts.
 ```
 
 ---
 
-# 7. Stored Procedure for Inserting Transactions
+# 📦 Python ETL for PostgreSQL
 
-```sql
-CREATE OR REPLACE PROCEDURE insert_transaction(
-    p_transaction_date TIMESTAMP,
-    p_customer_id INT,
-    p_store_id INT,
-    p_payment_method_id INT,
-    p_promotion_applied BOOLEAN,
-    p_promotion_id INT,
-    p_weather_id INT,
-    p_stockout BOOLEAN,
-    p_product_ids INT[],
-    p_quantities INT[]
-) LANGUAGE plpgsql AS $$
-DECLARE
-    v_transaction_id INT;
-    i INT;
-    v_exists INT;
-BEGIN
-    INSERT INTO Transactions (...) RETURNING transaction_id INTO v_transaction_id;
-
-    FOR i IN 1 .. array_length(p_product_ids, 1) LOOP
-        SELECT COUNT(*) INTO v_exists
-        FROM Inventory
-        WHERE store_id = p_store_id AND product_id = p_product_ids[i];
-
-        IF v_exists = 0 THEN
-            RAISE EXCEPTION 'Product % is not available in store %', p_product_ids[i], p_store_id;
-        END IF;
-
-        INSERT INTO TransactionDetails (...);
-    END LOOP;
-END;
-$$;
+```python
+# We load Walmart retail dataset using pandas.
+# Then we prepare and insert into each table of the normalized PostgreSQL database.
+# This is our initial data load into OLTP system.
 ```
 
 ---
 
-# 8. Row-Level Security and Role-Based Access Control
+# 🔄 Trigger and Procedure Code
 
 ```sql
-ALTER TABLE Transactions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE Inventory ENABLE ROW LEVEL SECURITY;
-ALTER TABLE DemandForecast ENABLE ROW LEVEL SECURITY;
-...
+-- We create a sequence for auto-incrementing transaction IDs.
+-- We define a Trigger Function that automatically updates Inventory levels when TransactionDetails are inserted.
+-- We also define a Stored Procedure for safer and batch-inserted Transaction + TransactionDetails insertions.
 ```
-(policies creation, role creation and grants)
 
 ---
 
-# 9. Real-Time Replication Using Kafka, Debezium, MongoDB
+# 🛡️ Row-Level Security (RLS)
 
-**Source Connector: PostgreSQL → Kafka**  
-**Sink Connector: Kafka → MongoDB**  
-**Python Initial Batch Backfill Script**  
-
-(Scripts and command examples)
+```sql
+-- Enabling RLS on all critical tenant-related tables.
+-- Creating different PostgreSQL roles for each store and an admin user.
+-- Defining RLS policies so that each role can only access their own tenant-specific data.
+```
 
 ---
 
-# End of Documentation
+# 🔗 Replication Setup SQL
+
+```sql
+-- Creating PUBLICATION named walmart_publication to expose all tables.
+-- Testing by inserting transactions to validate replication setup.
+-- Used later by Debezium Source Connector.
+```
+
+---
+
+# 🐍 Batch ETL Python Script (PostgreSQL to MongoDB)
+
+```python
+# Reading all non-critical tables from PostgreSQL.
+# Converting them into MongoDB-compatible documents.
+# Backfilling them into MongoDB collections manually.
+# Used for initial population of MongoDB (for dimension tables like customers, products).
+```
+
+---
+
+# 🔌 Debezium PostgreSQL Source Connector
+
+```json
+-- Connector JSON configuration
+-- It monitors PostgreSQL changes (CDC) on transactions, inventory, transactiondetails
+-- Publishes them to Kafka topics.
+```
+
+---
+
+# 🔌 MongoDB Sink Connector
+
+```json
+-- Connector JSON configuration
+-- It reads CDC events from Kafka topics and writes them into MongoDB collections.
+-- One sink connector handles multiple topics and maps them to different collections.
+```
+
+---
+
+# 🔍 MongoDB Fraud Detection Aggregation Pipeline
+
+```javascript
+// MongoDB aggregation pipeline that compares the sold quantities vs inventory levels per day.
+// If a product's sold quantity exceeds its recorded inventory, it flags it as potential fraud.
+// Helps identify missing inventory or unrecorded sales.
+```
+
+---
+
+# 📝 Conclusion
+
+Through this project, we achieved:
+- Fully normalized, scalable retail transaction OLTP database in PostgreSQL.
+- Enforced strict data security and tenant isolation using RLS and RBAC.
+- Built real-time replication pipelines using Kafka, Debezium, and MongoDB.
+- Enabled fraud detection capabilities through real-time data aggregation in MongoDB.
+- Delivered an architecture that is ready for production use in a Retail SaaS environment.
+
+> 🎯 This project simulates a real-world scalable and secure SaaS system for retail businesses.
+
+---
+
+# 🚀 Ready for GitHub Upload!
