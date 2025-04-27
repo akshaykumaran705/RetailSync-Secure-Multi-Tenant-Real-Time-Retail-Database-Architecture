@@ -139,4 +139,3 @@ Through this project, we achieved:
 
 ---
 
-# 🚀 Ready for GitHub Upload!
