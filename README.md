@@ -142,4 +142,3 @@ Through this project, we:
 
 ---
 
-# 🚀 Ready for Presentation and GitHub Upload!
