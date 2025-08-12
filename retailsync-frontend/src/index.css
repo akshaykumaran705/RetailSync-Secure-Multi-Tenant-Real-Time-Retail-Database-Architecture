@@ -1,0 +1,86 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* RetailSync Design System - Professional Dark Theme
+All colors MUST be HSL.
+*/
+
+@layer base {
+  :root {
+    /* Dark theme base colors */
+    --background: 220 26% 7%;
+    --foreground: 210 40% 98%;
+
+    --card: 220 23% 11%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 220 23% 11%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 217 91% 60%;
+    --primary-foreground: 210 40% 98%;
+
+    --secondary: 220 20% 20%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 220 20% 20%;
+    --muted-foreground: 215 20% 65%;
+
+    --accent: 142 76% 36%;
+    --accent-foreground: 210 40% 98%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 220 20% 20%;
+    --input: 220 23% 11%;
+    --ring: 217 91% 60%;
+
+    --radius: 0.75rem;
+
+    /* Custom RetailSync tokens */
+    --chart-grid: 220 20% 28%;
+    --chart-axis: 215 20% 63%;
+    --success: 142 76% 36%;
+    --warning: 38 92% 50%;
+    --info: 199 89% 48%;
+    
+    /* Gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(217 91% 60%), hsl(221 83% 53%));
+    --gradient-card: linear-gradient(145deg, hsl(220 23% 11%), hsl(220 20% 13%));
+    --gradient-accent: linear-gradient(135deg, hsl(142 76% 36%), hsl(158 64% 52%));
+    
+    /* Shadows */
+    --shadow-card: 0 4px 6px -1px hsl(220 26% 7% / 0.3), 0 2px 4px -1px hsl(220 26% 7% / 0.06);
+    --shadow-elevated: 0 10px 15px -3px hsl(220 26% 7% / 0.3), 0 4px 6px -2px hsl(220 26% 7% / 0.05);
+    
+    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
+    --sidebar-background: 0 0% 98%;
+
+    --sidebar-foreground: 240 5.3% 26.1%;
+
+    --sidebar-primary: 240 5.9% 10%;
+
+    --sidebar-primary-foreground: 0 0% 98%;
+
+    --sidebar-accent: 240 4.8% 95.9%;
+
+    --sidebar-accent-foreground: 240 5.9% 10%;
+
+    --sidebar-border: 220 13% 91%;
+
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+}
