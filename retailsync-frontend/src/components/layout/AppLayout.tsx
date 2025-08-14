@@ -20,8 +20,13 @@ interface AppLayoutProps {
 export function AppLayout({ user, onLogout }: AppLayoutProps) {
   const [activePage, setActivePage] = useState('Dashboard');
 
+  // Debug user role
+  console.log('🔍 AppLayout - Received user:', user);
+  console.log('🔍 AppLayout - User role:', user.role);
+
   const renderPage = () => {
     console.log('🎯 AppLayout - Rendering page:', activePage);
+    console.log('🎯 AppLayout - User role in renderPage:', user.role);
     
     switch (activePage) {
       case 'Dashboard':

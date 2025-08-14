@@ -40,15 +40,22 @@ export function SessionManager({ onSessionExpired }: SessionManagerProps) {
     return () => clearInterval(interval);
   }, [onSessionExpired]);
 
-  const handleRefreshSession = () => {
+  const handleRefreshSession = async () => {
     setIsRefreshing(true);
     try {
-      SessionService.refreshSession();
-      setShowWarning(false);
-      // Update time remaining
-      setTimeRemaining(SessionService.getSessionTimeRemaining());
+      const success = await SessionService.refreshSession();
+      if (success) {
+        setShowWarning(false);
+        // Update time remaining
+        setTimeRemaining(SessionService.getSessionTimeRemaining());
+      } else {
+        // Session refresh failed, trigger logout
+        onSessionExpired();
+      }
     } catch (error) {
       console.error('Failed to refresh session:', error);
+      // Session refresh failed, trigger logout
+      onSessionExpired();
     } finally {
       setIsRefreshing(false);
     }

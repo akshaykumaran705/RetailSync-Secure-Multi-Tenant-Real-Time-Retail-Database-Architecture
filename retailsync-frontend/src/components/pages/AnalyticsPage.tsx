@@ -24,16 +24,16 @@ interface AnalyticsData {
 }
 
 export function AnalyticsPage({ user }: AnalyticsPageProps) {
-  const [analytics, setAnalytics] = useState<AnalyticsData>({
-    topProducts: [],
-    storeTransactions: [],
-    salesTrends: [],
-    revenueData: [],
-    performanceMetrics: {}
-  });
+  const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const { toast } = useToast();
+
+  // Debug user role
+  console.log('🔍 AnalyticsPage - Received user:', user);
+  console.log('🔍 AnalyticsPage - User role:', user.role);
+  console.log('🔍 AnalyticsPage - Is admin check:', user.role === 'admin');
 
   useEffect(() => {
     fetchAnalyticsData();
@@ -154,7 +154,7 @@ export function AnalyticsPage({ user }: AnalyticsPageProps) {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Total Revenue</p>
-                <p className="text-3xl font-bold text-foreground">{formatCurrency(analytics.performanceMetrics.totalRevenue)}</p>
+                <p className="text-3xl font-bold text-foreground">{formatCurrency(analytics?.performanceMetrics.totalRevenue || 0)}</p>
                 <div className="flex items-center gap-1 mt-2">
                   <TrendingUp size={14} className="text-success" />
                   <span className="text-sm text-success font-medium">+15.3%</span>
@@ -172,7 +172,7 @@ export function AnalyticsPage({ user }: AnalyticsPageProps) {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Growth Rate</p>
-                <p className="text-3xl font-bold text-foreground">{analytics.performanceMetrics.growthRate}%</p>
+                <p className="text-3xl font-bold text-foreground">{analytics?.performanceMetrics.growthRate || 0}%</p>
                 <div className="flex items-center gap-1 mt-2">
                   <TrendingUp size={14} className="text-success" />
                   <span className="text-sm text-success font-medium">+2.1%</span>
@@ -190,7 +190,7 @@ export function AnalyticsPage({ user }: AnalyticsPageProps) {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Customer Retention</p>
-                <p className="text-3xl font-bold text-foreground">{analytics.performanceMetrics.customerRetention}%</p>
+                <p className="text-3xl font-bold text-foreground">{analytics?.performanceMetrics.customerRetention || 0}%</p>
                 <div className="flex items-center gap-1 mt-2">
                   <TrendingDown size={14} className="text-orange-500" />
                   <span className="text-sm text-orange-500 font-medium">-1.2%</span>
@@ -208,7 +208,7 @@ export function AnalyticsPage({ user }: AnalyticsPageProps) {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Avg Order Value</p>
-                <p className="text-3xl font-bold text-foreground">{formatCurrency(analytics.performanceMetrics.avgOrderValue)}</p>
+                <p className="text-3xl font-bold text-foreground">{formatCurrency(analytics?.performanceMetrics.avgOrderValue || 0)}</p>
                 <div className="flex items-center gap-1 mt-2">
                   <TrendingUp size={14} className="text-success" />
                   <span className="text-sm text-success font-medium">+8.7%</span>
@@ -241,7 +241,7 @@ export function AnalyticsPage({ user }: AnalyticsPageProps) {
               </CardHeader>
               <CardContent className="h-80">
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={analytics.salesTrends}>
+                  <AreaChart data={analytics?.salesTrends || []}>
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--chart-grid))" />
                     <XAxis dataKey="month" stroke="hsl(var(--chart-axis))" fontSize={12} />
                     <YAxis stroke="hsl(var(--chart-axis))" fontSize={12} tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`} />
@@ -269,7 +269,7 @@ export function AnalyticsPage({ user }: AnalyticsPageProps) {
               </CardHeader>
               <CardContent className="h-80">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={analytics.revenueData}>
+                  <BarChart data={analytics?.revenueData || []}>
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--chart-grid))" />
                     <XAxis dataKey="name" stroke="hsl(var(--chart-axis))" fontSize={12} />
                     <YAxis stroke="hsl(var(--chart-axis))" fontSize={12} tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`} />
@@ -301,7 +301,7 @@ export function AnalyticsPage({ user }: AnalyticsPageProps) {
             </CardHeader>
             <CardContent className="h-96">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={analytics.topProducts} layout="vertical" margin={{ top: 5, right: 30, left: 100, bottom: 5 }}>
+                <BarChart data={analytics?.topProducts || []} layout="vertical" margin={{ top: 5, right: 30, left: 100, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--chart-grid))" />
                   <XAxis type="number" stroke="hsl(var(--chart-axis))" fontSize={12} />
                   <YAxis type="category" dataKey="product_name" stroke="hsl(var(--chart-axis))" width={120} fontSize={12} />
@@ -332,7 +332,7 @@ export function AnalyticsPage({ user }: AnalyticsPageProps) {
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
-                      data={analytics.storeTransactions}
+                      data={analytics?.storeTransactions || []}
                       dataKey="transaction_count"
                       nameKey="location"
                       cx="50%"
@@ -341,7 +341,7 @@ export function AnalyticsPage({ user }: AnalyticsPageProps) {
                       fill="hsl(var(--primary))"
                       label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
                     >
-                      {analytics.storeTransactions.map((entry, index) => (
+                      {analytics?.storeTransactions.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
                       ))}
                     </Pie>
@@ -382,7 +382,7 @@ export function AnalyticsPage({ user }: AnalyticsPageProps) {
             </CardHeader>
             <CardContent className="h-96">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={analytics.salesTrends}>
+                <LineChart data={analytics?.salesTrends || []}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--chart-grid))" />
                   <XAxis dataKey="month" stroke="hsl(var(--chart-axis))" fontSize={12} />
                   <YAxis stroke="hsl(var(--chart-axis))" fontSize={12} tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`} />

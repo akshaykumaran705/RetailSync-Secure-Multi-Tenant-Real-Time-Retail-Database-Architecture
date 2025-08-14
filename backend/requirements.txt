@@ -1,4 +1,11 @@
-Flask
-python-dotenv
-psycopg2-binary
-flask-cors
+Flask==2.3.2
+python-dotenv==1.0.0
+psycopg2-binary==2.9.7
+flask-cors==4.0.0
+Flask-Limiter==3.5.0
+Flask-Talisman==1.1.0
+gunicorn==21.2.0
+prometheus-flask-exporter==0.23.0
+sentry-sdk[flask]==1.38.0
+redis==5.0.1
+celery==5.3.4
