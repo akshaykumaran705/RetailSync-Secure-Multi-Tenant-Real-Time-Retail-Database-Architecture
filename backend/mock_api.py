@@ -2,12 +2,15 @@
 # This Flask server provides all necessary endpoints for the multi-page RetailSync app,
 # including a new /login endpoint and role-based data access for analytics.
 
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, session, g
 from flask_cors import CORS
 import psycopg2
 from psycopg2.extras import RealDictCursor
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
+import hashlib
+import secrets
+from functools import wraps
 
 # Load environment variables from .env file if it exists
 try:
@@ -18,32 +21,164 @@ except ImportError:
     print("Or set environment variables manually.")
 
 app = Flask(__name__)
-CORS(app)
+app.secret_key = os.getenv("SECRET_KEY", secrets.token_hex(32))
+
+# Configure sessions properly
+app.config['SESSION_COOKIE_SECURE'] = False  # Set to True in production with HTTPS
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=24)
+app.config['SESSION_COOKIE_DOMAIN'] = 'localhost'  # Standardize on localhost
+app.config['SESSION_COOKIE_PATH'] = '/'
+app.config['SESSION_COOKIE_NAME'] = 'session'
+
+# Configure CORS properly for production
+CORS(app, 
+     origins=[
+         "http://localhost:8080",  # Current frontend port
+         "http://localhost:3000",
+         "http://localhost:5173",  # Vite default port
+         "http://localhost:8083",  # Alternative frontend port
+         "https://yourdomain.com"  # Add your production domain
+     ], 
+     supports_credentials=True,
+     allow_headers=["Content-Type", "Authorization", "X-Requested-With"],
+     methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+     expose_headers=["Set-Cookie"])
 
 # --- Database Connection Details ---
-DB_NAME = os.getenv("DB_NAME", "postgres")  # Changed default to walmart
+DB_NAME = os.getenv("DB_NAME", "walmart")
 DB_USER = os.getenv("DB_USER", "postgres")
-DB_PASSWORD = os.getenv("DB_PASSWORD", "")  # Empty default - must be set
+DB_PASSWORD = os.getenv("DB_PASSWORD", "")
 DB_HOST = os.getenv("DB_HOST", "database-1.cxmeuqiimnc6.us-east-2.rds.amazonaws.com")
 DB_PORT = os.getenv("DB_PORT", "5432")
 
-# --- Mock User Store ---
-# In a real application, this would be a 'users' table in your database.
+# --- User Store (In production, use database) ---
 USERS = {
-    "admin": {"id": 0, "password": "admin_password", "role": "admin", "store_id": None},
-    "store1_manager": {"id": 1, "password": "pass1", "role": "manager", "store_id": 1},
-    "store2_manager": {"id": 2, "password": "pass2", "role": "manager", "store_id": 2},
-    "store3_manager": {"id": 3, "password": "pass3", "role": "manager", "store_id": 3},
-    "store4_manager": {"id": 4, "password": "pass4", "role": "manager", "store_id": 4},
-    "store5_manager": {"id": 5, "password": "pass5", "role": "manager", "store_id": 5},
+    "admin": {
+        "id": 0, 
+        "password_hash": hashlib.sha256("admin_password".encode()).hexdigest(), 
+        "role": "admin", 
+        "store_id": None
+    },
+    "store1_manager": {
+        "id": 1, 
+        "password_hash": hashlib.sha256("pass1".encode()).hexdigest(), 
+        "role": "manager", 
+        "store_id": 1
+    },
+    "store2_manager": {
+        "id": 2, 
+        "password_hash": hashlib.sha256("pass2".encode()).hexdigest(), 
+        "role": "manager", 
+        "store_id": 2
+    },
+    "store3_manager": {
+        "id": 3, 
+        "password_hash": hashlib.sha256("pass3".encode()).hexdigest(), 
+        "role": "manager", 
+        "store_id": 3
+    },
+    "store4_manager": {
+        "id": 4, 
+        "password_hash": hashlib.sha256("pass4".encode()).hexdigest(), 
+        "role": "manager", 
+        "store_id": 4
+    },
+    "store5_manager": {
+        "id": 5, 
+        "password_hash": hashlib.sha256("pass5".encode()).hexdigest(), 
+        "role": "manager", 
+        "store_id": 5
+    },
 }
 
+# --- Security Middleware ---
+@app.before_request
+def before_request():
+    # Add security headers
+    g.user = None
+    
+    # Debug session info
+    print(f"🔍 Request path: {request.path}")
+    print(f"🔍 Session data: {dict(session)}")
+    print(f"🔍 User ID in session: {session.get('user_id')}")
+    print(f"🔍 Request cookies: {dict(request.cookies)}")
+    print(f"🔍 Request headers: {dict(request.headers)}")
+    print(f"🔍 Request origin: {request.headers.get('Origin', 'No Origin')}")
+    print(f"🔍 Session cookie: {request.cookies.get('session', 'No session cookie')}")
+    
+    if 'user_id' in session:
+        g.user = session.get('user_data')
+        print(f"🔍 Set g.user: {g.user}")
+        print(f"🔍 User role: {g.user.get('role') if g.user else 'No role'}")
+    else:
+        print("🔍 No user_id in session")
+    
+    print(f"🔍 Final g.user: {g.user}")
+    print(f"🔍 Final g.user role: {g.user.get('role') if g.user else 'No role'}")
+    print("=" * 50)
+
+@app.after_request
+def after_request(response):
+    # Security headers
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-Frame-Options'] = 'DENY'
+    response.headers['X-XSS-Protection'] = '1; mode=block'
+    response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
+    return response
+
+# --- Authentication Decorator ---
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not g.user:
+            return jsonify({"error": "Authentication required"}), 401
+        return f(*args, **kwargs)
+    return decorated_function
+
+def admin_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not g.user or g.user.get('role') != 'admin':
+            return jsonify({"error": "Admin access required"}), 403
+        return f(*args, **kwargs)
+    return decorated_function
+
+# --- Input Validation ---
+def validate_store_id(store_id):
+    try:
+        store_id = int(store_id)
+        if store_id not in [1, 2, 3, 4, 5]:
+            return False
+        return store_id
+    except (ValueError, TypeError):
+        return False
+
+def validate_customer_id(customer_id):
+    try:
+        return int(customer_id) > 0
+    except (ValueError, TypeError):
+        return False
+
+# --- Database Connection with Connection Pooling ---
 def get_db_connection():
     if not DB_PASSWORD:
         raise Exception("DB_PASSWORD environment variable is not set. Please set your RDS password.")
     
     try:
-        conn = psycopg2.connect(dbname=DB_NAME, user=DB_USER, password=DB_PASSWORD, host=DB_HOST, port=DB_PORT)
+        conn = psycopg2.connect(
+            dbname=DB_NAME, 
+            user=DB_USER, 
+            password=DB_PASSWORD, 
+            host=DB_HOST, 
+            port=DB_PORT,
+            # Connection pooling settings
+            keepalives=1,
+            keepalives_idle=30,
+            keepalives_interval=10,
+            keepalives_count=5
+        )
         return conn
     except psycopg2.OperationalError as e:
         if "password authentication failed" in str(e):
@@ -76,15 +211,48 @@ def login():
         return jsonify({"error": "Username and password are required"}), 400
 
     user = USERS.get(username)
-    if user and user['password'] == password:
+    if user and user['password_hash'] == hashlib.sha256(password.encode()).hexdigest():
         # Don't send the password back to the client
-        user_data_to_send = {k: v for k, v in user.items() if k != 'password'}
-        return jsonify(user_data_to_send)
+        user_data_to_send = {k: v for k, v in user.items() if k != 'password_hash'}
+        
+        # Set session data
+        session['user_id'] = user['id']
+        session['user_data'] = user_data_to_send
+        session.permanent = True
+        
+        print(f"🔐 Login successful for user: {username}")
+        print(f"🔐 Session data set: {dict(session)}")
+        print(f"🔐 Session cookie domain: {app.config.get('SESSION_COOKIE_DOMAIN')}")
+        print(f"🔐 Session cookie path: {app.config.get('SESSION_COOKIE_PATH')}")
+        
+        # Create response with explicit cookie setting
+        response = jsonify(user_data_to_send)
+        
+        # Flask will automatically set the session cookie with proper domain
+        # No need to manually set cookies when domain is properly configured
+        
+        return response
     
+    print(f"❌ Login failed for user: {username}")
     return jsonify({"error": "Invalid credentials"}), 401
+
+# 1.5. NEW Logout Endpoint
+@app.route('/api/logout', methods=['POST'])
+@login_required
+def logout():
+    session.clear()
+    return jsonify({"message": "Logged out successfully"})
+
+# 1.6. NEW Session Check Endpoint
+@app.route('/api/session', methods=['GET'])
+def check_session():
+    if g.user:
+        return jsonify({"authenticated": True, "user": g.user})
+    return jsonify({"authenticated": False}), 401
 
 # 2. NEW Get All Stores Endpoint (Admin only)
 @app.route('/api/v1/stores', methods=['GET'])
+@login_required
 def get_all_stores():
     try:
         conn = get_db_connection()
@@ -111,6 +279,7 @@ def get_all_stores():
 
 # 3. Dashboard Endpoint (Updated with access control)
 @app.route('/api/v1/stores/<int:store_id>/dashboard', methods=['GET'])
+@login_required
 def get_dashboard_data(store_id):
     try:
         # Get user info from request headers (you'll need to implement proper auth)
@@ -196,7 +365,6 @@ def get_dashboard_data(store_id):
         sales_trend = cur.fetchall()
         
         # Fill in missing dates with 0 sales
-        from datetime import datetime, timedelta
         complete_sales_trend = []
         for i in range(7):
             date = (latest_date - timedelta(days=6-i)).strftime('%Y-%m-%d')
@@ -224,6 +392,7 @@ def get_dashboard_data(store_id):
 
 # 4. NEW Admin Dashboard Endpoint (All stores summary)
 @app.route('/api/v1/admin/dashboard', methods=['GET'])
+@admin_required
 def get_admin_dashboard():
     try:
         conn = get_db_connection()
@@ -273,6 +442,7 @@ def get_admin_dashboard():
 
 # 5. Products List Endpoint (Improved with proper data types and error handling)
 @app.route('/api/v1/stores/<int:store_id>/products', methods=['GET'])
+@login_required
 def get_products(store_id):
     try:
         conn = get_db_connection()
@@ -315,6 +485,7 @@ def get_products(store_id):
 
 # 6. MODIFIED Top Products Analytics Endpoint
 @app.route('/api/v1/analytics/top-products', methods=['GET'])
+@login_required
 def get_top_products():
     store_id = request.args.get('store_id', type=int)
     conn = get_db_connection()
@@ -347,6 +518,7 @@ def get_top_products():
 
 # 7. MODIFIED Store Transaction Share Analytics Endpoint
 @app.route('/api/v1/analytics/store-transactions', methods=['GET'])
+@login_required
 def get_store_transactions():
     # This endpoint is admin-only, so no filter is needed.
     conn = get_db_connection()
@@ -366,6 +538,7 @@ def get_store_transactions():
 
 # 8. NEW Customers Endpoint
 @app.route('/api/v1/customers', methods=['GET'])
+@login_required
 def get_customers():
     store_id = request.args.get('store_id', type=int)
     
@@ -423,6 +596,7 @@ def get_customers():
 
 # 9. NEW Transactions Endpoint (with store filtering)
 @app.route('/api/v1/transactions', methods=['GET'])
+@login_required
 def get_transactions():
     store_id = request.args.get('store_id', type=int)
     
@@ -482,6 +656,7 @@ def get_transactions():
 
 # 9.5. NEW Store-specific Transactions Endpoint
 @app.route('/api/v1/stores/<int:store_id>/transactions', methods=['GET'])
+@login_required
 def get_store_transactions_by_id(store_id):
     try:
         conn = get_db_connection()
@@ -532,6 +707,7 @@ def get_store_transactions_by_id(store_id):
 
 # 10. NEW Transaction Details Endpoint
 @app.route('/api/v1/transactions/<int:transaction_id>', methods=['GET'])
+@login_required
 def get_transaction_details(transaction_id):
     try:
         conn = get_db_connection()
@@ -621,6 +797,7 @@ def get_transaction_details(transaction_id):
 
 # 11. NEW General Products Endpoint (for admin users)
 @app.route('/api/v1/products', methods=['GET'])
+@admin_required
 def get_all_products():
     store_id = request.args.get('store_id', type=int)
     

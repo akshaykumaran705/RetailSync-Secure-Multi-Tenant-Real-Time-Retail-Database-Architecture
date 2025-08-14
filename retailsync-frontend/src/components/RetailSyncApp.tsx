@@ -10,14 +10,40 @@ export default function RetailSyncApp() {
 
   useEffect(() => {
     // Check for existing session on component mount
-    const existingUser = SessionService.getSession();
-    if (existingUser) {
-      setCurrentUser(existingUser);
-    }
-    setIsLoading(false);
+    const checkSession = async () => {
+      try {
+        // First check local storage
+        const existingUser = SessionService.getSession();
+        console.log('🔍 RetailSyncApp - Existing user from session:', existingUser);
+        if (existingUser) {
+          // Then verify with backend
+          const backendUser = await SessionService.checkBackendSession();
+          console.log('🔍 RetailSyncApp - Backend user:', backendUser);
+          if (backendUser) {
+            console.log('🔍 RetailSyncApp - Setting current user:', backendUser);
+            setCurrentUser(backendUser);
+          } else {
+            // Backend session invalid, clear local session
+            console.log('🔍 RetailSyncApp - Backend session invalid, clearing session');
+            SessionService.clearSession();
+            setCurrentUser(null);
+          }
+        }
+      } catch (error) {
+        console.error('Session check failed:', error);
+        SessionService.clearSession();
+        setCurrentUser(null);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    checkSession();
   }, []);
 
   const handleLoginSuccess = (user: User) => {
+    console.log('🔍 RetailSyncApp - Login success, user:', user);
+    console.log('🔍 RetailSyncApp - User role:', user.role);
     setCurrentUser(user);
     SessionService.saveSession(user);
   };
@@ -43,5 +69,8 @@ export default function RetailSyncApp() {
     return <LoginScreen onLoginSuccess={handleLoginSuccess} />;
   }
 
+  console.log('🔍 RetailSyncApp - Rendering AppLayout with user:', currentUser);
+  console.log('🔍 RetailSyncApp - User role in render:', currentUser.role);
+  
   return <AppLayout user={currentUser} onLogout={handleLogout} />;
 }

@@ -47,6 +47,21 @@ export function Sidebar({ user, activePage, setActivePage, onLogout }: SidebarPr
     return 'bg-green-500/20 text-green-700 border-green-500/30';
   };
 
+  const handleExtendSession = async () => {
+    try {
+      const success = await SessionService.refreshSession();
+      if (success) {
+        // Update the session time display
+        setSessionTimeRemaining(SessionService.getSessionTimeRemaining());
+      } else {
+        // Session refresh failed, could trigger logout here
+        console.error('Failed to extend session');
+      }
+    } catch (error) {
+      console.error('Failed to extend session:', error);
+    }
+  };
+
   const navItems = [
     { name: 'Dashboard', icon: Home, color: 'from-blue-500 to-cyan-500' },
     { name: 'Products', icon: ShoppingBag, color: 'from-green-500 to-emerald-500' },
@@ -144,11 +159,7 @@ export function Sidebar({ user, activePage, setActivePage, onLogout }: SidebarPr
         <Button
           variant="ghost"
           className="w-full justify-start gap-4 h-12 text-primary hover:text-primary hover:bg-primary/10 transition-all duration-300 group"
-          onClick={() => {
-            SessionService.refreshSession();
-            // Update the session time display
-            setSessionTimeRemaining(SessionService.getSessionTimeRemaining());
-          }}
+          onClick={handleExtendSession}
         >
           <div className="p-2 rounded-lg bg-primary/20 group-hover:bg-primary/30 transition-colors">
             <Shield size={16} className="text-primary" />
